@@ -22,7 +22,7 @@
 Program tests are typically aiming at checking specific module constellations
 and making sure the details are being right there. These are synthetic small
 programs, each of which try to demonstrate one or more points or special
-behaviour.
+behavior.
 
 """
 

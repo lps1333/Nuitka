@@ -26,15 +26,20 @@
 // having them as distinct loaders would only require to duplicate the search
 // and registering of stuff.
 
+// This file is included from another C file, help IDEs to still parse it on
+// its own.
+#ifdef __IDE_ONLY__
+#include "nuitka/prelude.h"
+#endif
+
+#include "nuitka/unfreezing.h"
+
 #include <osdefs.h>
 
 #ifdef _WIN32
 #undef SEP
 #define SEP '\\'
 #endif
-
-#include "nuitka/prelude.h"
-#include "nuitka/unfreezing.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1228,6 +1233,7 @@ PyObject *getImportLibBootstrapModule(void) {
 #endif
 
 #if PYTHON_VERSION >= 0x340
+
 static PyObject *_path_unfreezer_repr_module(PyObject *self, PyObject *args, PyObject *kwds) {
     PyObject *module;
     PyObject *unused;
@@ -1423,6 +1429,39 @@ static PyObject *_path_unfreezer_exec_module(PyObject *self, PyObject *args, PyO
     return EXECUTE_EMBEDDED_MODULE(module);
 }
 
+#if PYTHON_VERSION >= 0x370
+
+// The resource reader class is implemented in a separate file.
+#include "MetaPathBasedLoaderResourceReader.c"
+
+static PyObject *_path_unfreezer_get_resource_reader(PyObject *self, PyObject *args, PyObject *kwds) {
+    PyObject *module_name;
+
+    int res =
+        PyArg_ParseTupleAndKeywords(args, kwds, "O:get_resource_reader", (char **)_kwlist_exec_module, &module_name);
+
+    if (unlikely(res == 0)) {
+        return NULL;
+    }
+
+    char const *name = Nuitka_String_AsString(module_name);
+
+    struct Nuitka_MetaPathBasedLoaderEntry *entry = findEntry(name);
+
+    if (entry) {
+        if (isVerbose()) {
+            PySys_WriteStderr("import %s # claimed responsibility (compiled)\n", name);
+        }
+
+        return Nuitka_ResourceReader_New(entry);
+    }
+
+    PyErr_Format(PyExc_RuntimeError, "Requested resource reader for unhandled module %s", module_name);
+    return NULL;
+}
+
+#endif
+
 #endif
 
 #endif
@@ -1578,6 +1617,11 @@ static PyMethodDef Nuitka_Loader_methods[] = {
     {"create_module", (PyCFunction)_path_unfreezer_create_module, METH_STATIC | METH_VARARGS | METH_KEYWORDS, NULL},
     {"exec_module", (PyCFunction)_path_unfreezer_exec_module, METH_STATIC | METH_VARARGS | METH_KEYWORDS, NULL},
 #endif
+#if PYTHON_VERSION >= 0x370
+    {"get_resource_reader", (PyCFunction)_path_unfreezer_get_resource_reader,
+     METH_STATIC | METH_VARARGS | METH_KEYWORDS, NULL},
+#endif
+
 #if _NUITKA_EXPERIMENTAL_METADATA
     {"find_distributions", (PyCFunction)_path_unfreezer_find_distributions, METH_STATIC | METH_VARARGS | METH_KEYWORDS,
      NULL},
@@ -1712,6 +1756,10 @@ void registerMetaPathBasedUnfreezer(struct Nuitka_MetaPathBasedLoaderEntry *_loa
 
 #if _NUITKA_EXPERIMENTAL_METADATA
     PyType_Ready(&Nuitka_Distribution_Type);
+#endif
+
+#if PYTHON_VERSION >= 0x370
+    PyType_Ready(&Nuitka_ResourceReader_Type);
 #endif
 
     // Register it as a meta path loader.
